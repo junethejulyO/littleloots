@@ -20,6 +20,7 @@ const font = (pkg, file, family, weight) => {
 const fonts = [
   font('fredoka', 'fredoka-latin-600-normal.woff2', 'Fredoka', 600),
   ...[700, 800, 900].map(w => font('nunito', `nunito-latin-${w}-normal.woff2`, 'Nunito', w)),
+  ...[700, 800].map(w => font('inter-tight', `inter-tight-latin-${w}-normal.woff2`, '"Inter Tight"', w)),
 ].join('\n');
 const html = readFileSync(path.join(here, 'src/film.html'), 'utf8').replace('/*FONTS*/', fonts);
 const out = path.join(dist, 'bondi-for-parents.html');

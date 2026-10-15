@@ -1,4 +1,4 @@
 node_modules
 dist/still-*
-dist/sheet.png
+dist/sheet*.png
 dist/soundtrack.wav
