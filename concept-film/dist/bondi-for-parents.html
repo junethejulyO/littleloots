@@ -35,10 +35,10 @@ body.render #ui,body.render #bar{display:none}
 </div>
 <script>
 (() => {
-const W = 1920, H = 1080, DUR = 33;
+const W = 1920, H = 1080, DUR = 34;
 const RENDER = location.search.includes('render');
 if (RENDER) document.body.classList.add('render');
-const cv = document.getElementById('c'), g = cv.getContext('2d');
+const cv = document.getElementById('c'); let g = cv.getContext('2d');
 
 /* ================= utils ================= */
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
@@ -243,30 +243,63 @@ function hop(lt, t0, h = 60, d = .3) {
   return { y: 0, sx: 1 + sq * .8, sy: 1 - sq };
 }
 
-/* ================= the photo frame ================= */
-// outer width w; screen content is drawn in a fixed 800 x 600 space
-function drawDevice(cx, cy, w, content, o = {}) {
-  const h = w * .7875, wood = w * .045, sw = w * .85, sh = sw * .75;
-  g.save(); g.translate(cx, cy);
-  if (o.shadow !== false) { g.shadowColor = 'rgba(90,40,20,.32)'; g.shadowBlur = w * .07; g.shadowOffsetY = w * .035; }
-  const wg = g.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-  wg.addColorStop(0, '#E2BE92'); wg.addColorStop(.5, '#CFA474'); wg.addColorStop(1, '#B98D5E');
-  g.fillStyle = wg; rr(-w / 2, -h / 2, w, h, w * .022); g.fill(); g.shadowColor = 'transparent';
-  g.save(); rr(-w / 2, -h / 2, w, h, w * .022); g.clip(); g.strokeStyle = 'rgba(120,80,40,.12)'; g.lineWidth = Math.max(1, w * .002);
-  for (let i = 0; i < 26; i++) { const yy = -h / 2 + (i + .5) * h / 26; g.beginPath(); g.moveTo(-w / 2, yy); g.bezierCurveTo(-w / 6, yy + Math.sin(i) * 6, w / 6, yy - Math.cos(i * 1.3) * 6, w / 2, yy); g.stroke(); }
-  g.restore();
-  g.fillStyle = '#FBF6EE'; rr(-w / 2 + wood, -h / 2 + wood, w - wood * 2, h - wood * 2, w * .008); g.fill();
-  g.save(); rr(-sw / 2, -sh / 2, sw, sh, w * .006); g.clip();
-  g.translate(-sw / 2, -sh / 2); g.scale(sw / 800, sw / 800);
-  content();
-  g.restore();
-  g.save(); rr(-sw / 2, -sh / 2, sw, sh, w * .006); g.clip();
-  const sg = g.createLinearGradient(-sw / 2, -sh / 2, sw / 2, sh / 2);
-  sg.addColorStop(0, 'rgba(255,255,255,.14)'); sg.addColorStop(.32, 'rgba(255,255,255,.03)'); sg.addColorStop(.33, 'rgba(255,255,255,0)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = sg; g.fillRect(-sw / 2, -sh / 2, sw, sh);
-  g.restore();
-  g.strokeStyle = 'rgba(80,50,30,.25)'; g.lineWidth = Math.max(1, w * .002); rr(-sw / 2, -sh / 2, sw, sh, w * .006); g.stroke();
-  g.restore();
+/* ================= the photo frame (product, in 3D) ================= */
+// The front face is rendered flat to an offscreen canvas, then drawn in vertical strips with perspective.
+const FW = 1600, FH = 1248, RIM = 48, MAT = 72, SX = RIM + MAT, SY = RIM + MAT, SWD = FW - 2 * SX, SHD = FH - 2 * SY;
+const DEV = document.createElement('canvas'); DEV.width = FW; DEV.height = FH;
+const dg = DEV.getContext('2d');
+function renderFace(content, on = 1, sweep = -1) {
+  const prev = g; g = dg;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.clearRect(0, 0, FW, FH);
+  const al = g.createLinearGradient(0, 0, FW, FH); al.addColorStop(0, '#F5F3EF'); al.addColorStop(.5, '#DFDBD5'); al.addColorStop(1, '#C3BEB7');
+  g.fillStyle = al; rr(0, 0, FW, FH, 64); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 4; rr(6, 6, FW - 12, FH - 12, 58); g.stroke();
+  g.fillStyle = '#FBFAF7'; rr(RIM, RIM, FW - 2 * RIM, FH - 2 * RIM, 20); g.fill();
+  const ms = g.createLinearGradient(0, RIM, 0, RIM + 40); ms.addColorStop(0, 'rgba(0,0,0,.10)'); ms.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = ms; g.fillRect(RIM, RIM, FW - 2 * RIM, 40);
+  g.save(); rr(SX, SY, SWD, SHD, 10); g.clip();
+  g.fillStyle = '#0C0C0E'; g.fillRect(SX, SY, SWD, SHD);
+  if (on > 0) { g.globalAlpha = on; const k = SWD / 800; g.translate(SX, SY); g.scale(k, k); g.translate(0, (SHD / k - 600) / 2); content(); }
+  g.restore(); g.globalAlpha = 1;
+  g.save(); rr(SX, SY, SWD, SHD, 10); g.clip();
+  const sg = g.createLinearGradient(SX, SY, SX + SWD, SY + SHD);
+  sg.addColorStop(0, 'rgba(255,255,255,.16)'); sg.addColorStop(.35, 'rgba(255,255,255,.04)'); sg.addColorStop(.36, 'rgba(255,255,255,0)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = sg; g.fillRect(SX, SY, SWD, SHD); g.restore();
+  g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 3; rr(SX, SY, SWD, SHD, 10); g.stroke();
+  if (sweep > -.5 && sweep < 1.5) { // a light sweep across the aluminium
+    g.save(); rr(0, 0, FW, FH, 64); g.clip(); g.globalCompositeOperation = 'lighter';
+    const x = lerp(-FW * .6, FW * 1.6, sweep), sw = g.createLinearGradient(x - 260, 0, x + 260, FH * .4);
+    sw.addColorStop(0, 'rgba(255,255,255,0)'); sw.addColorStop(.5, 'rgba(255,255,255,.35)'); sw.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sw; g.fillRect(0, 0, FW, FH); g.restore();
+  }
+  g = prev;
+}
+function drawDevice(cx, cy, w, ang, content, o = {}) {
+  renderFace(content, o.on ?? 1, o.sweep ?? -1);
+  const h = w * FH / FW, f = w * 2.6, d = w * .035, N = 96, ca = Math.cos(ang), sa = Math.sin(ang);
+  const P = (u, v, s) => { const x = u * ca - s * sa, z = u * sa + s * ca, k = f / (f + z); return [cx + x * k, cy + v * k, k]; };
+  if (o.floor === 'shadow') {
+    g.save(); g.translate(cx, cy + h * .53); g.scale(1, .09);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, w * .6); gr.addColorStop(0, 'rgba(0,0,0,.22)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(-w, -w, 2 * w, 2 * w); g.restore();
+  }
+  const strips = refl => {
+    for (let i = 0; i < N; i++) {
+      const u0 = -w / 2 + i * w / N, u1 = u0 + w / N, p0 = P(u0, 0, 0), p1 = P(u1, 0, 0), hh = h * (p0[2] + p1[2]) / 2, sx = i * FW / N;
+      if (!refl) g.drawImage(DEV, sx, 0, FW / N, FH, p0[0], cy - hh / 2, p1[0] - p0[0] + .8, hh);
+      else { g.save(); g.translate(0, cy + hh / 2 + 6); g.scale(1, -1); g.drawImage(DEV, sx, 0, FW / N, FH, p0[0], -hh, p1[0] - p0[0] + .8, hh); g.restore(); }
+    }
+  };
+  if (o.floor === 'reflect') {
+    g.save(); g.globalAlpha = .1; strips(true); g.restore();
+    const fy = cy + h * .45, fade = g.createLinearGradient(0, fy, 0, fy + h * (o.reflLen || .45));
+    fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(1, 'rgba(0,0,0,1)'); g.fillStyle = fade; g.fillRect(cx - w, fy, 2 * w, H);
+  }
+  if (Math.abs(ang) > .01) {
+    const u = ang > 0 ? -w / 2 : w / 2, a = P(u, -h / 2 + w * .03, 0), b = P(u, -h / 2 + w * .03, d), c = P(u, h / 2 - w * .03, d), e = P(u, h / 2 - w * .03, 0);
+    const sg = g.createLinearGradient(a[0], 0, b[0], 0); sg.addColorStop(0, '#D6D1CA'); sg.addColorStop(1, '#9C968E');
+    g.fillStyle = sg; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.lineTo(c[0], c[1]); g.lineTo(e[0], e[1]); g.closePath(); g.fill();
+  }
+  strips(false);
 }
 function screenBG(c1 = '#FFF6EC', c2 = '#F8E3CF', glowX = 330, glowY = 380) {
   const gr = g.createLinearGradient(0, 0, 0, 600); gr.addColorStop(0, c1); gr.addColorStop(1, c2);
@@ -274,22 +307,26 @@ function screenBG(c1 = '#FFF6EC', c2 = '#F8E3CF', glowX = 330, glowY = 380) {
   const gl = g.createRadialGradient(glowX, glowY, 0, glowX, glowY, 330);
   gl.addColorStop(0, 'rgba(255,196,130,.42)'); gl.addColorStop(1, 'rgba(255,196,130,0)'); g.fillStyle = gl; g.fillRect(0, 0, 800, 600);
 }
+// iOS-style notification banner
 function note(x, y, k, title, sub, icon = 'check') {
   if (k <= 0) return;
-  g.save(); g.translate(x, y); g.scale(k, k);
-  g.font = '800 26px Nunito'; let tw = g.measureText(title).width;
-  if (sub) { g.font = '700 20px Nunito'; tw = Math.max(tw, g.measureText(sub).width); }
-  const bw = tw + 104, bh = sub ? 86 : 64;
-  g.shadowColor = 'rgba(120,60,30,.18)'; g.shadowBlur = 24; g.shadowOffsetY = 8;
-  g.fillStyle = '#FFFDF9'; rr(-bw / 2, -bh / 2, bw, bh, 22); g.fill(); g.shadowColor = 'transparent';
-  const ix = -bw / 2 + 40;
-  g.fillStyle = icon === 'check' ? SAGE : CORAL; g.beginPath(); g.arc(ix, 0, 20, 0, TAU); g.fill();
-  g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.lineJoin = 'round';
-  if (icon === 'check') { g.beginPath(); g.moveTo(ix - 9, 0); g.lineTo(ix - 2, 7); g.lineTo(ix + 10, -7); g.stroke(); }
-  else { g.fillStyle = '#fff'; g.font = '900 24px Nunito'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(icon, ix, 1); }
-  g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = INK; g.font = '800 26px Nunito';
-  g.fillText(title, ix + 34, sub ? -14 : 1);
-  if (sub) { g.fillStyle = INK2; g.font = '700 20px Nunito'; g.fillText(sub, ix + 34, 18); }
+  g.save(); g.translate(x, y); const s = .88 + .12 * k; g.scale(s, s); g.globalAlpha *= clamp(k);
+  g.font = `600 24px ${HEAD}`; g.letterSpacing = '0px'; let tw = g.measureText(title).width;
+  if (sub) { g.font = `500 20px ${HEAD}`; tw = Math.max(tw, g.measureText(sub).width); }
+  const bw = Math.max(280, tw + 100), bh = sub ? 84 : 70;
+  g.shadowColor = 'rgba(0,0,0,.14)'; g.shadowBlur = 30; g.shadowOffsetY = 10;
+  g.fillStyle = 'rgba(255,255,255,.94)'; rr(-bw / 2, -bh / 2, bw, bh, 22); g.fill(); g.shadowColor = 'transparent';
+  const ix = -bw / 2 + 16;
+  if (icon === 'check') {
+    g.fillStyle = '#34C759'; rr(ix, -20, 40, 40, 11); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 4.5; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(ix + 11, 0); g.lineTo(ix + 18, 7); g.lineTo(ix + 30, -7); g.stroke();
+  } else {
+    g.fillStyle = CORAL; rr(ix, -20, 40, 40, 11); g.fill();
+    g.fillStyle = '#1B1210'; [-6, 6].forEach(dx => { g.beginPath(); g.ellipse(ix + 20 + dx, 1, 3, 6, 0, 0, TAU); g.fill(); });
+  }
+  g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#1D1D1F'; g.font = `600 24px ${HEAD}`;
+  g.fillText(title, ix + 56, sub ? -13 : 1);
+  if (sub) { g.fillStyle = '#6E6E73'; g.font = `500 20px ${HEAD}`; g.fillText(sub, ix + 56, 17); }
   g.restore();
 }
 function sparkle(x, y, s, a = 1, col = AMBER) {
@@ -303,23 +340,24 @@ function burst(cx, cy, p, n = 7, r = 120) {
   for (let i = 0; i < n; i++) { const a = i / n * TAU + .3, d = r * E.outCubic(p); sparkle(cx + Math.cos(a) * d, cy + Math.sin(a) * d, (1 - p) * .9); }
 }
 
-/* ================= kinetic type ================= */
-function kinetic(text, x, y, size, lt, t0, o = {}) {
-  const p = seg(lt, t0, t0 + (o.d || .42)); if (p <= 0) return;
-  g.save();
-  g.font = `${o.weight || 800} ${size}px ${o.font || HEAD}`; g.letterSpacing = (o.ls ?? -size * .035) + 'px';
-  if (o.maxW) { const m = g.measureText(text).width; if (m > o.maxW) { size *= o.maxW / m; g.font = `${o.weight || 800} ${size}px ${o.font || HEAD}`; g.letterSpacing = (o.ls ?? -size * .035) + 'px'; } }
-  const w = g.measureText(text).width, x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
-  g.beginPath(); g.rect(x0 - size, y - size * 1.02, w + size * 2, size * 1.32); g.clip();
-  g.fillStyle = o.color || INK; g.textBaseline = 'alphabetic';
-  g.fillText(text, x0, y + (1 - E.outExpo(p)) * size * 1.15);
-  g.restore();
+/* ================= type: fade, rise and un-blur ================= */
+function aText(text, x, y, size, lt, t0, o = {}) {
+  const p = seg(lt, t0, t0 + (o.d || .7)); if (p <= 0) return;
+  const e = E.outCubic(p);
+  g.save(); g.font = `${o.weight || 700} ${size}px ${o.font || HEAD}`; g.letterSpacing = (o.ls ?? -size * .022) + 'px';
+  g.textAlign = o.align || 'center'; g.textBaseline = 'alphabetic';
+  if (o.grad) {
+    const w = g.measureText(text).width, x0 = o.align === 'left' ? x : x - w / 2, gr = g.createLinearGradient(x0, 0, x0 + w, 0);
+    o.grad.forEach((c, i) => gr.addColorStop(i / (o.grad.length - 1), c)); g.fillStyle = gr;
+  } else g.fillStyle = o.color || '#1D1D1F';
+  g.globalAlpha = e * (o.out ?? 1); if (e < 1) g.filter = `blur(${(1 - e) * 14}px)`;
+  g.fillText(text, x, y + (1 - e) * (o.rise ?? 28)); g.restore();
 }
-function kineticRuns(runs, x, y, size, lt, t0, o = {}) {
-  g.font = `${o.weight || 800} ${size}px ${o.font || HEAD}`; g.letterSpacing = (-size * .035) + 'px';
-  const ws = runs.map(r => g.measureText(r[0]).width), tot = ws.reduce((a, b) => a + b, 0);
-  let cx = o.align === 'left' ? x : x - tot / 2;
-  runs.forEach((r, i) => { kinetic(r[0], cx, y, size, lt, t0 + i * .12, { ...o, align: 'left', color: r[1] }); cx += ws[i]; });
+function aWords(words, x, y, size, lt, t0, step, o = {}) {
+  g.font = `${o.weight || 700} ${size}px ${HEAD}`; g.letterSpacing = (-size * .022) + 'px';
+  const sp = g.measureText(' ').width, ws = words.map(w => g.measureText(w).width), tot = ws.reduce((a, b) => a + b, 0) + sp * (words.length - 1);
+  let cx = x - tot / 2;
+  words.forEach((w, i) => { aText(w, cx, y, size, lt, t0 + i * step, { ...o, align: 'left', grad: o.grad ? o.grad : null, out: o.out }); cx += ws[i] + sp; });
 }
 
 /* ================= in-screen scenes (800 x 600) ================= */
@@ -457,216 +495,155 @@ function scrConnects(lt, T) {
 }
 
 /* ================= shots ================= */
-const BEAT = .5;
-function bgFill(c) { g.fillStyle = c; g.fillRect(0, 0, W, H); }
-function softGlow(x, y, r, col) { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(255,200,140,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
-
-const CAPS = [
-  { word: 'Reminds.', sub: 'Every pill, right on time.', bg: '#FFE9BD', scr: scrReminds, side: 'L', d: 2 },
-  { word: 'Fixes.', sub: 'Wi-Fi, TV, the little things.', bg: '#FFF5EC', scr: scrFixes, side: 'F', d: 2 },
-  { word: 'Protects.', sub: 'Scam calls never get through.', bg: '#F27A63', scr: scrProtects, side: 'R', d: 2, light: true },
-  { word: 'Books.', sub: 'Doctor, ride — done.', bg: '#DDEEDC', scr: scrBooks, side: 'L', d: 2 },
-  { word: 'Shops.', bg: '#FFDCCB', scr: scrShops, side: 'F', d: 1.5 },
-  { word: 'Plans ahead.', bg: '#DCE7EE', scr: scrPlans, side: 'R', d: 1.5 },
-  { word: 'Remembers.', bg: '#F9DCE3', scr: scrRemembers, side: 'L', d: 1.5 },
-  { word: 'Connects.', bg: '#FFF2EA', scr: scrConnects, side: 'F', d: 1.5 },
-];
+const BAR = 2.5; // 96 bpm, four beats to the bar
+const LIGHT = '#F5F5F7', TXT = '#1D1D1F', GRAY = '#86868B', GRAD = ['#F27A63', '#FF8F5E', '#FFB061'];
+function fill(c) { g.fillStyle = c; g.fillRect(0, 0, W, H); }
+function glow(x, y, r, col) { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
 const SHOTS = [];
-const addShot = (d, draw, enter = 'cut') => { const s = SHOTS.length ? SHOTS[SHOTS.length - 1].e : 0; SHOTS.push({ s, e: s + d, draw, enter }); };
+const addShot = (s, e, draw) => SHOTS.push({ s, e, draw });
 
-// 0–2 cold open
-addShot(2, (t, lt) => {
-  bgFill('#FFF7EF');
-  kineticRuns([['Mom', INK], [' & ', CORAL], ['Dad', INK]], 960, 520, 190, lt, .1);
-  kinetic('never ask for help.', 960, 690, 96, lt, .95, { align: 'center', color: INK2, weight: 700 });
+// 0 – 1.8  black, one quiet line
+addShot(0, 1.8, (t, lt) => {
+  fill('#000');
+  aText('For the people who raised us.', 960, 560, 64, lt, .2, { color: '#F5F5F7', weight: 600, out: 1 - seg(lt, 1.35, 1.75) });
 });
-// 2–4 "So Bondi doesn't wait."
-addShot(2, (t, lt) => {
-  bgFill('#FFF7EF');
-  const z = 1 + lt * .03; g.save(); g.translate(960, 540); g.scale(z, z); g.translate(-960, -540);
-  kineticRuns([['So ', INK], ['Bondi', CORAL]], 960, 500, 190, lt, 0);
-  kinetic("doesn't wait.", 960, 690, 190, lt, .5, { align: 'center' });
-  g.restore();
-}, 'punch');
-// 4–8 hero: the frame, then Bondi wipes in over the family photo
-addShot(4, (t, lt) => {
-  bgFill('#FBEFE2'); softGlow(720, 520, 700, 'rgba(255,196,130,.55)');
-  const fin = E.outExpo(seg(lt, 0, .7)), push = 1 + lt * .02 + E.inExpo(seg(lt, 3.55, 4)) * 2.2;
-  g.save(); g.translate(640, 540); g.scale(push, push); g.translate(-640, -540);
-  drawDevice(640, 540 + (1 - fin) * 500, 920 * lerp(.7, 1, fin), () => {
+// 1.8 – 5.5  product reveal: the frame turns to camera, the screen wakes, Bondi wakes
+addShot(1.8, 5.5, (t, lt) => {
+  fill('#000');
+  const on = seg(lt, 1.2, 1.7);
+  glow(960, 480, 900, `rgba(242,122,99,${.28 * on})`);
+  const ang = lerp(.9, .1, E.inOut(seg(lt, 0, 3.3))), w = lerp(1250, 880, E.inOut(seg(lt, 0, 3.4)));
+  const awake = lt > 1.75;
+  drawDevice(960, 470, w, ang, () => {
     screenBG();
-    const wipe = E.inOut(seg(lt, .9, 1.3));
-    drawBondi(400, 545, 380, { t, look: lt > 2.2 && lt < 3 ? .3 : 0, waveR: seg(lt, 2.0, 2.2) * (1 - seg(lt, 3.1, 3.3)), rays: seg(lt, 1.7, 2.7), ...landing(lt, 1.25, 500) });
-    if (wipe < 1) {
-      g.save(); g.beginPath(); g.rect(0, 0, 800, 600); g.arc(400, 330, 760 * wipe, 0, TAU, true); g.clip('evenodd');
-      const ph = g.createLinearGradient(0, 0, 0, 600); ph.addColorStop(0, '#FFD3A8'); ph.addColorStop(.62, '#FFE9CF'); ph.addColorStop(.63, '#B7CFA0'); ph.addColorStop(1, '#9EBE88');
-      g.fillStyle = ph; g.fillRect(0, 0, 800, 600); g.fillStyle = '#FFC56E'; g.beginPath(); g.arc(560, 210, 60, 0, TAU); g.fill();
-      [[300, '#7FB0A0', 1.1], [440, CORAL, 1], [370, '#F7C07E', .7]].forEach(([x, c, s]) => { g.fillStyle = c; g.beginPath(); g.ellipse(x, 480 - 40 * s, 56 * s, 84 * s, 0, 0, TAU); g.fill(); g.fillStyle = '#F6C9A8'; g.beginPath(); g.arc(x, 330 - 40 * s, 36 * s, 0, TAU); g.fill(); });
-      g.restore();
-    }
-  });
-  g.restore();
-  kinetic('Meet Bondi.', 1190, 520, 130, lt, 1.7, { maxW: 660 });
-  kinetic('It lives in the family photo frame.', 1194, 600, 40, lt, 2.1, { weight: 700, color: INK2, ls: 0, font: 'Nunito' });
-  kinetic('And looks after Mom & Dad.', 1194, 652, 40, lt, 2.3, { weight: 700, color: INK2, ls: 0, font: 'Nunito' });
+    drawBondi(400, 545, 380, { t, blink: awake ? undefined : 1, rays: seg(lt, 1.85, 2.85), waveR: seg(lt, 2.2, 2.4) * (1 - seg(lt, 3.3, 3.5)), happy: lt > 2.5 && lt < 3.2 ? 1 : 0, ...hop(lt, 1.8, 40) });
+  }, { on, sweep: seg(lt, 0, 1.6) * 2 - .4, floor: 'reflect', reflLen: .3 });
+  aText('Bondi', 960, 1000, 110, lt, 2.4, { grad: GRAD });
 });
-// 8–22 capabilities
-CAPS.forEach((c, i) => addShot(c.d, (t, lt) => {
-  bgFill(c.bg);
-  const z = 1 + lt * .025, ink = c.light ? '#FFFFFF' : INK;
-  if (c.side === 'F') {
-    // full-bleed inside the screen, then pull back to reveal the frame
-    const pull = E.inOut(seg(lt, c.d - .55, c.d)), w = lerp(2100, 1450, pull);
-    drawDevice(960, lerp(420, 540, pull), w, () => c.scr(lt, t), { shadow: pull > .5 });
-    kinetic(c.word, 130, 300, 170, lt, .08, { maxW: 720 });
-  } else {
-    const L = c.side === 'L', fx = L ? 690 : 1230;
-    softGlow(fx, 560, 640, c.light ? 'rgba(255,220,180,.4)' : 'rgba(255,255,255,.55)');
-    g.save(); g.translate(fx, 560); g.scale(z, z); g.translate(-fx, -560);
-    drawDevice(fx, 560, 960, () => c.scr(lt, t));
-    g.restore();
-    const tx = L ? 1240 : 120;
-    kinetic(c.word, tx, 540, 150, lt, .08, { color: ink, maxW: 560 });
-    if (c.sub) kinetic(c.sub, tx + 6, 630, 42, lt, .3, { weight: 700, color: c.light ? 'rgba(255,255,255,.88)' : INK2, ls: 0, font: 'Nunito' });
-  }
-  g.save(); g.globalAlpha = .75; g.fillStyle = c.side === 'F' ? INK : ink; g.font = '800 24px Nunito'; g.letterSpacing = '4px';
-  g.fillText(`${String(i + 1).padStart(2, '0')} / 08`, c.side === 'R' ? 120 : (c.side === 'F' ? 136 : 1246), c.side === 'F' ? 1010 : 110); g.restore();
-}, i === 0 ? 'zoom' : (i % 2 ? 'whip' : 'punch')));
-// 22–25 grid montage
-const GRID = [['pills', '#FFE9BD'], ['wrench', '#FFF5EC'], ['shield', '#F9DED6'], ['cal', '#DDEEDC'], [null, '#FFF6EC'], ['umbrella', '#DCE7EE'], ['bag', '#FFDCCB'], ['gift', '#F9DCE3'], ['heart', '#FFF2EA']];
-addShot(3, (t, lt) => {
-  bgFill('#FBEFE2');
-  const out = E.outExpo(seg(lt, 0, 1.0)), into = E.inExpo(seg(lt, 2.55, 3));
-  const z = lerp(2.75, 1, out) * (1 + into * 2.2);
+// 5.5 – 8  white statement
+addShot(5.5, 8, (t, lt) => {
+  fill('#FFFFFF');
+  const z = 1 + lt * .012; g.save(); g.translate(960, 540); g.scale(z, z); g.translate(-960, -540);
+  aWords(['It', "doesn't", 'wait'], 960, 500, 128, lt, .1, .18, { color: TXT });
+  aWords(['to', 'be', 'asked.'], 960, 650, 128, lt, .64, .18, { grad: GRAD });
+  g.restore();
+});
+// 8 – 23  six capabilities, one bar each
+const FEAT = [
+  { h: 'Never misses a pill.', s: 'Gentle reminders, right on time.', dark: false, scr: scrReminds, ang: [.2, .05] },
+  { h: 'Fixes the Wi-Fi.', s: 'Before Dad even notices.', dark: true, scr: scrFixes, ang: [-.2, -.05] },
+  { h: 'Stops scams cold.', s: 'Suspicious calls never get through.', dark: false, scr: scrProtects, ang: [.18, .03] },
+  { h: 'Books the doctor. And the ride.', s: 'Then lets the family know.', dark: false, scr: scrBooks, ang: [-.18, -.03] },
+  { h: 'Sees the rain coming.', s: 'The umbrella is already by the door.', dark: true, scr: scrPlans, ang: [.2, .05] },
+  { h: 'Calls Lily when she’s free.', s: 'Family, always within reach.', dark: false, scr: scrConnects, ang: [-.18, -.03] },
+];
+const FEAT_T0 = 8, LAG = .45;
+FEAT.forEach((f, i) => addShot(FEAT_T0 + i * BAR, FEAT_T0 + (i + 1) * BAR, (t, lt) => {
+  fill(f.dark ? '#000' : (i % 2 ? '#FFFFFF' : LIGHT));
+  if (f.dark) glow(960, 640, 760, 'rgba(242,122,99,.22)');
+  aText(f.h, 960, 178, 78, lt, .05, { color: f.dark ? '#F5F5F7' : TXT });
+  aText(f.s, 960, 244, 34, lt, .25, { color: GRAY, weight: 500, ls: 0 });
+  const p = E.outCubic(seg(lt, 0, BAR));
+  drawDevice(960, 672 + (1 - E.outCubic(seg(lt, 0, .8))) * 40, 850 * (1 + p * .05), lerp(f.ang[0], f.ang[1], p), () => f.scr(lt - LAG, t), { floor: f.dark ? 'reflect' : 'shadow', reflLen: .25 });
+}));
+// 23 – 28  bento grid
+const TILES = [['pills', 'Pill reminders', 'On time, every time'], ['wrench', 'Home tech fixes', 'Wi-Fi, TV, settings'], ['shield', 'Scam shield', 'Blocks bad calls'], ['cal', 'Appointments', 'Doctor and rides'],
+  ['umbrella', 'Weather heads-up', 'Plans around rain'], ['bag', 'Groceries', 'Before the fridge is bare'], ['gift', 'Birthdays', 'Never forgotten'], ['heart', 'Family calls', 'When everyone is free']];
+const BENTO = (() => {
+  const tw = 360, th = 262, gp = 22, x0 = (W - (tw * 4 + gp * 3)) / 2, y0 = (H - (th * 3 + gp * 2)) / 2;
+  const cell = (c, r, cw = 1, rh = 1) => [x0 + c * (tw + gp), y0 + r * (th + gp), tw * cw + gp * (cw - 1), th * rh + gp * (rh - 1)];
+  return { big: cell(0, 0, 2, 2), small: [cell(2, 0), cell(3, 0), cell(2, 1), cell(3, 1), cell(0, 2), cell(1, 2), cell(2, 2), cell(3, 2)] };
+})();
+addShot(23, 28, (t, lt) => {
+  fill(LIGHT);
+  const z = 1.05 - E.outCubic(seg(lt, 0, 5)) * .05;
   g.save(); g.translate(960, 540); g.scale(z, z); g.translate(-960, -540);
-  GRID.forEach(([prop, bg], i) => {
-    const cx = 960 + ((i % 3) - 1) * 450, cy = 540 + (Math.floor(i / 3) - 1) * 360;
-    const k = i === 4 ? 1 : popIn(lt, .25 + i * .06, .3);
-    if (k <= 0) return;
-    g.save(); g.translate(cx, cy); g.scale(k, k); g.translate(-cx, -cy);
-    drawDevice(cx, cy, 410, () => {
-      screenBG(bg, bg);
-      drawBondi(prop ? 330 : 400, 540, prop ? 360 : 380, { t: t + i, prop, propK: prop ? 1 : 0, happy: (i + Math.floor(lt * 4)) % 3 === 0 ? 1 : 0, waveR: prop ? 0 : 1, look: prop ? .5 : 0, ...hop((lt + i * .37) % 1, .3, 50) });
-    });
-    g.restore();
+  const tile = ([x, y, w, h], k, fn) => {
+    if (k <= 0) return; const e = E.outCubic(k);
+    g.save(); g.globalAlpha = e; g.translate(0, (1 - e) * 40);
+    g.shadowColor = 'rgba(0,0,0,.06)'; g.shadowBlur = 30; g.shadowOffsetY = 8; g.fillStyle = '#FFFFFF'; rr(x, y, w, h, 28); g.fill(); g.shadowColor = 'transparent';
+    g.save(); rr(x, y, w, h, 28); g.clip(); fn(x, y, w, h); g.restore(); g.restore();
+  };
+  tile(BENTO.big, seg(lt, .05, .7), (x, y, w, h) => {
+    const gr = g.createLinearGradient(x, y, x, y + h); gr.addColorStop(0, '#FFF6EC'); gr.addColorStop(1, '#FBE3CF'); g.fillStyle = gr; g.fillRect(x, y, w, h);
+    glow(x + w / 2, y + h * .72, 360, 'rgba(255,190,120,.45)');
+    drawBondi(x + w / 2, y + h - 40, 360, { t, prop: 'heart', propK: 1, waveL: seg(lt, .8, 1) * (1 - seg(lt, 2.4, 2.6)), happy: lt > 3 && lt < 3.8 ? 1 : 0 });
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.font = `700 54px ${HEAD}`; g.letterSpacing = '-1.2px';
+    g.fillStyle = TXT; g.fillText('Always one', x + 44, y + 84);
+    const gw = g.measureText('step ahead.').width, gg = g.createLinearGradient(x + 44, 0, x + 44 + gw, 0); GRAD.forEach((c, i) => gg.addColorStop(i / 2, c));
+    g.fillStyle = gg; g.fillText('step ahead.', x + 44, y + 144);
   });
+  BENTO.small.forEach((r, i) => tile(r, seg(lt, .3 + i * .08, .95 + i * .08), (x, y, w, h) => {
+    const [name, label, cap] = TILES[i], s = SPR[name], f = Math.min(130 / s.w, 110 / s.h);
+    g.drawImage(s.c, x + 34, y + 30 + (110 - s.h * f) / 2, s.w * f, s.h * f);
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillStyle = TXT; g.font = `700 30px ${HEAD}`; g.letterSpacing = '-.5px'; g.fillText(label, x + 34, y + h - 62);
+    g.fillStyle = GRAY; g.font = `500 21px ${HEAD}`; g.letterSpacing = '0px'; g.fillText(cap, x + 34, y + h - 30);
+  }));
   g.restore();
-  const ta = seg(lt, 1.1, 1.3) * (1 - into);
-  if (ta > 0) {
-    g.fillStyle = `rgba(251,239,226,${.82 * ta})`; g.fillRect(0, 0, W, H);
-    kineticRuns([['One frame. ', INK], ['Always one step ahead.', CORAL]], 960, 575, 104, lt, 1.15);
-  }
-}, 'punch');
-// 25–33 outro in the living room
-addShot(8, (t, lt) => {
-  const wall = g.createLinearGradient(0, 0, 0, H); wall.addColorStop(0, '#FCEBDB'); wall.addColorStop(1, '#F3D6BE'); g.fillStyle = wall; g.fillRect(0, 0, W, H);
-  const z = 1.06 - E.outCubic(seg(lt, 0, 8)) * .06;
-  g.save(); g.translate(1240, 600); g.scale(z, z); g.translate(-1240, -600);
-  softGlow(1780, 300, 600, 'rgba(255,190,120,.55)');
-  g.fillStyle = '#E9C8A2'; g.beginPath(); g.moveTo(1730, 250); g.lineTo(1850, 250); g.lineTo(1890, 400); g.lineTo(1690, 400); g.closePath(); g.fill();
-  g.fillStyle = '#B98D5E'; g.fillRect(1782, 400, 16, 480);
-  g.fillStyle = '#C49468'; rr(700, 880, 1180, 40, 12); g.fill(); g.fillStyle = '#B5865A'; g.fillRect(740, 920, 1100, 200);
-  g.fillStyle = '#E7D3BF'; rr(1580, 790, 110, 92, 18); g.fill();
-  g.fillStyle = '#7FAE88'; [[-50, -.8], [-20, -.35], [10, .1], [40, .6], [0, -.1]].forEach(([dx, a]) => { g.save(); g.translate(1635 + dx * .3, 795); g.rotate(a); g.beginPath(); g.ellipse(0, -70, 24, 74, 0, 0, TAU); g.fill(); g.restore(); });
-  drawDevice(1190, 600, 700, () => {
+});
+// 28 – 34  end card
+addShot(28, 34, (t, lt) => {
+  fill('#000');
+  glow(960, 420, 820, 'rgba(242,122,99,.26)');
+  drawDevice(960, 410, 800, lerp(-.32, -.04, E.inOut(seg(lt, 0, 3))), () => {
     screenBG();
-    drawBondi(400, 545, 380, { t, prop: 'heart', propK: popIn(lt, 1.6), waveL: seg(lt, .4, .6) * (1 - seg(lt, 2.4, 2.6)), happy: lt > 3.4 && lt < 4.6 ? 1 : 0, rays: seg(lt, 3.0, 4.0), ...hop(lt, 3.4, 50) });
-  });
-  g.restore();
-  kinetic('Bondi', 150, 470, 200, lt, .5, { font: 'Fredoka', weight: 600, ls: 0 });
-  const dot = popIn(lt, .95); if (dot > 0) { g.fillStyle = CORAL; g.beginPath(); g.arc(660, 445, 20 * dot, 0, TAU); g.fill(); }
-  kinetic('Always one step ahead', 156, 570, 54, lt, 1.0, { color: CORAL });
-  kinetic('— for Mom & Dad.', 156, 636, 54, lt, 1.15);
-  const c = seg(lt, 1.8, 2.2);
-  if (c > 0) {
-    g.save(); g.globalAlpha = c; g.translate(156, 750 + (1 - E.outCubic(c)) * 20);
-    g.font = '900 24px Nunito'; g.letterSpacing = '5px'; const lbl = 'FOUNDER EDITION', lw = g.measureText(lbl).width;
-    g.fillStyle = CORAL; rr(0, -26, lw + 48, 52, 26); g.fill(); g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.fillText(lbl, 26, 1);
-    g.letterSpacing = '0px'; g.fillStyle = INK; g.font = '800 30px Nunito'; g.fillText('heybondi.ai', lw + 48 + 26, 1);
-    g.restore();
-  }
-}, 'zoom');
+    drawBondi(400, 545, 380, { t, prop: 'heart', propK: popIn(lt, .6), waveL: seg(lt, 1.2, 1.4) * (1 - seg(lt, 3, 3.2)), happy: lt > 3.4 && lt < 4.4 ? 1 : 0, rays: seg(lt, 3.2, 4.2), ...hop(lt, 3.4, 40) });
+  }, { floor: 'reflect', reflLen: .18 });
+  aText('Bondi', 960, 900, 120, lt, 1.0, { grad: GRAD });
+  aText('Founder Edition', 960, 966, 40, lt, 1.4, { color: '#A1A1A6', weight: 600, ls: 0 });
+  aText('heybondi.ai', 960, 1030, 28, lt, 1.8, { color: '#F5F5F7', weight: 600, ls: 0 });
+});
 
 /* ================= compositor ================= */
 function frame(t) {
-  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.letterSpacing = '0px'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.shadowColor = 'transparent';
-  let i = SHOTS.findIndex(s => t >= s.s && t < s.e); if (i < 0) i = SHOTS.length - 1;
-  const sh = SHOTS[i], lt = t - sh.s;
-  if (sh.enter === 'whip' && i > 0 && lt < .32) {
-    const p = E.inOut(lt / .32), pv = SHOTS[i - 1];
-    g.save(); g.translate(-W * p, 0); pv.draw(t, t - pv.s); g.restore();
-    g.save(); g.translate(W * (1 - p), 0); sh.draw(t, lt); g.restore();
-    g.fillStyle = `rgba(255,255,255,${.35 * Math.sin(p * Math.PI)})`;
-    for (let k = 0; k < 7; k++) g.fillRect(0, 120 + k * 140, W, 6);
-  } else {
-    const punch = sh.enter === 'punch' ? 1 + .07 * (1 - E.outExpo(seg(lt, 0, .35))) : sh.enter === 'zoom' ? 1 + .25 * (1 - E.outExpo(seg(lt, 0, .5))) : 1;
-    g.save(); g.translate(960, 540); g.scale(punch, punch); g.translate(-960, -540); sh.draw(t, lt); g.restore();
-    if (sh.enter === 'zoom' && lt < .2) { g.fillStyle = `rgba(255,248,240,${1 - lt / .2})`; g.fillRect(0, 0, W, H); }
-  }
-  const v = g.createRadialGradient(W / 2, H / 2, H * .5, W / 2, H / 2, W * .75);
-  v.addColorStop(0, 'rgba(110,55,30,0)'); v.addColorStop(1, 'rgba(110,55,30,.12)'); g.fillStyle = v; g.fillRect(0, 0, W, H);
-  const f = Math.max(1 - seg(t, 0, .25), seg(t, DUR - .6, DUR));
-  if (f > 0) { g.fillStyle = `rgba(255,247,239,${f})`; g.fillRect(0, 0, W, H); }
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.filter = 'none'; g.letterSpacing = '0px'; g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.shadowColor = 'transparent';
+  let sh = SHOTS.find(s => t >= s.s && t < s.e) || SHOTS[SHOTS.length - 1];
+  const lt = t - sh.s, z = 1 + .025 * (1 - E.outCubic(seg(lt, 0, .7)));
+  g.save(); g.translate(960, 540); g.scale(z, z); g.translate(-960, -540); sh.draw(t, lt); g.restore();
+  const f = seg(t, DUR - .9, DUR);
+  if (f > 0) { g.fillStyle = `rgba(0,0,0,${f})`; g.fillRect(0, 0, W, H); }
 }
 
 /* ================= sound: xylophone & marimba ================= */
 const CUES = [];
 const cue = (t, notes, step = 0, vel = .6, kind = 'xylo') => (Array.isArray(notes) ? notes : [notes]).forEach((n, i) => CUES.push([t + i * step, n, vel, kind]));
 (function buildCues() {
-  // cold open: ticking anticipation + a slam on each line
-  for (let k = 0; k < 8; k++) cue(k * BEAT, 96, 0, .06, 'block');
-  cue(.1, [60, 72, 79], 0, .55); cue(.1, 48, 0, .5, 'marimba');
-  cue(.95, [67, 74], .06, .4);
-  cue(2.0, [64, 72, 76], 0, .5); cue(2.0, 52, 0, .45, 'marimba');
-  cue(2.5, [69, 76, 81], 0, .5);
-  cue(3.3, [72, 74, 76, 79, 81, 84, 86, 88], .085, .32);
-  // groove: 120 bpm, C – G – Am – F
-  const CH = [[48, 55, 64, 67, 72], [43, 50, 62, 67, 71], [45, 52, 60, 64, 69], [41, 48, 60, 65, 69]];
-  for (let bar = 0; bar < 14; bar++) {
-    const t0 = 4 + bar * 2, ch = CH[bar % 4];
-    if (t0 >= 31) break;
-    const half = t0 >= 25;
-    cue(t0, ch[0] + 12, 0, .5, 'marimba'); cue(t0 + 1, ch[0] + 12, 0, .38, 'marimba');
-    if (!half) cue(t0 + 1.75, ch[1] + 12, 0, .3, 'marimba');
-    [.5, 1.5].forEach(b => cue(t0 + b, 98, 0, half ? .07 : .13, 'block'));
-    for (let e = 0; e < 8; e++) if (!half || e % 2 === 0) cue(t0 + e * .25, ch[2 + (e % 3)] + 12, 0, e % 2 ? .07 : .1);
+  const BEAT = BAR / 4;
+  // opening line
+  cue(.25, [72, 79], .12, .22); cue(.25, 48, 0, .28, 'marimba');
+  // reveal
+  cue(1.8, [48, 55, 60], .12, .3, 'marimba'); cue(2.1, [91, 93, 96], .09, .1);
+  cue(3.0, [60, 64, 67, 72, 76], .05, .45); cue(3.0, 48, 0, .5, 'marimba');
+  cue(3.65, [79, 84], .09, .45); cue(4.0, [88, 91, 88, 91], .12, .18);
+  cue(4.2, [72, 76, 79, 84], .07, .38);
+  // statement, a note per word
+  [76, 79, 81, 84, 88, 91].forEach((n, i) => cue(5.6 + i * .18, n, 0, .36));
+  // groove from 3.0 to 28: C – Am – F – G
+  const CH = [[48, 64, 67, 72], [45, 60, 64, 69], [41, 60, 65, 69], [43, 59, 62, 67]];
+  for (let bar = 0; bar < 10; bar++) {
+    const t0 = 3 + bar * BAR, ch = CH[bar % 4], soft = bar < 2 ? .6 : 1;
+    cue(t0, ch[0] + 12, 0, .42 * soft, 'marimba'); cue(t0 + 2 * BEAT, ch[0] + 12, 0, .3 * soft, 'marimba'); cue(t0 + 3.5 * BEAT, ch[0] + 19, 0, .2 * soft, 'marimba');
+    [1, 3].forEach(b => cue(t0 + b * BEAT, 98, 0, .07 * soft, 'block'));
+    for (let e = 0; e < 8; e++) cue(t0 + e * BEAT / 2, ch[1 + (e % 3)] + 12, 0, (e % 2 ? .06 : .09) * soft);
   }
-  // hero
-  cue(4.0, [60, 64, 67, 72], .03, .5);
-  cue(5.25, [84, 83, 81, 79], .06, .2); cue(5.6, [67, 72, 76, 79, 84], .05, .55);
-  cue(5.75, [79, 84], .09, .5);
-  cue(6.0, [76, 79, 84], .12, .35);
-  // capability shots: downbeat stab, whip glissandi, in-shot events
-  const caps = SHOTS.slice(3, 11);
-  const stab = [[72, 76, 79], [74, 79, 83], [76, 81, 84], [77, 81, 84], [79, 84, 88], [74, 79, 86], [76, 81, 88], [79, 84, 91]];
-  caps.forEach((s, i) => {
-    cue(s.s, stab[i], 0, .5); if (s.enter === 'whip') cue(s.s - .2, [72, 76, 79, 83, 86, 89], .03, .22);
-    cue(s.s + .1, stab[i][2] + 12, 0, .3);
-  });
-  const at = (i, lt) => caps[i].s + lt;
-  cue(at(0, .3), 88, 0, .35); cue(at(0, 1.0), [84, 88, 91], .06, .5);
-  for (let k = 0; k < 4; k++) cue(at(1, .25 + k * .2), k % 2 ? 93 : 91, 0, .32);
-  cue(at(1, .95), [79, 84, 88], .1, .45); cue(at(1, 1.15), [91, 96], .07, .4);
-  for (let k = 0; k < 6; k++) cue(at(2, .05 + k * .06), k % 2 ? 84 : 88, 0, .16);
-  cue(at(2, .75), 55, 0, .6, 'marimba'); cue(at(2, .78), [79, 84, 91], .05, .5);
-  cue(at(3, .45), [72, 76, 79, 83, 86], .08, .28); cue(at(3, .9), [84, 88], .06, .4); cue(at(3, 1.15), [86, 91], .06, .4);
-  for (let k = 0; k < 4; k++) cue(at(4, .42 + k * .16), [79, 81, 84, 88][k], 0, .4);
-  cue(at(4, .95), [88, 91], .06, .35);
-  cue(at(5, .25), [67, 74, 79, 86], .04, .4); cue(at(5, .75), 88, 0, .3);
-  cue(at(6, .3), [72, 76, 79, 84, 88, 91, 96], .03, .42); cue(at(6, .6), [91, 93], .06, .3);
-  cue(at(7, .15), [76, 79], .1, .35); cue(at(7, .55), [84, 88, 91], .06, .4);
-  // grid: rapid pops and a riser
-  const gs = SHOTS[11].s;
-  GRID.forEach((_, i) => i !== 4 && cue(gs + .25 + i * .06, 84 + [0, 2, 4, 7, 0, 9, 12, 14, 16][i], 0, .3));
-  cue(gs + 1.15, [72, 79, 84, 88], .04, .5); cue(gs + 1.15, 48, 0, .55, 'marimba');
-  for (let k = 0; k < 12; k++) cue(gs + 2.0 + k * .08, 72 + [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26][k], 0, .22 + k * .02);
-  // outro
-  const os = SHOTS[12].s;
-  cue(os, [48, 60], 0, .55, 'marimba'); cue(os, [72, 76, 79, 84], .05, .5);
-  cue(os + .5, [76, 79, 81, 79], .25, .4); cue(os + 1.6, 84, 0, .4);
-  cue(os + 3.0, [79, 84], .09, .5); cue(os + 3.4, [84, 88, 91], .06, .4);
-  cue(os + 4.0, [76, 79, 81, 84, 81, 79, 76, 72], .25, .3);
-  cue(os + 6.0, [48, 55, 60, 64, 67], .04, .5, 'marimba'); cue(os + 6.0, [72, 76, 79, 84, 88, 91, 96], .07, .4);
+  // capability shots
+  const stab = [[72, 76, 79], [74, 77, 81], [72, 76, 79], [77, 81, 84], [74, 77, 81], [79, 83, 86]];
+  FEAT.forEach((f, i) => cue(FEAT_T0 + i * BAR, stab[i], .02, .38));
+  const at = (i, lt) => FEAT_T0 + i * BAR + LAG + lt;
+  cue(at(0, .3), [84, 88], .07, .3); cue(at(0, 1.0), [84, 88, 91], .06, .42);
+  for (let k = 0; k < 4; k++) cue(at(1, .25 + k * .2), k % 2 ? 93 : 91, 0, .26);
+  cue(at(1, .95), [79, 84, 88], .1, .4); cue(at(1, 1.15), [84, 88], .07, .3);
+  for (let k = 0; k < 6; k++) cue(at(2, .05 + k * .06), k % 2 ? 84 : 88, 0, .13);
+  cue(at(2, .75), 55, 0, .5, 'marimba'); cue(at(2, .78), [79, 84, 91], .05, .42);
+  cue(at(3, .45), [72, 76, 79, 83, 86], .08, .24); cue(at(3, .9), [84, 88], .06, .32); cue(at(3, 1.15), [86, 91], .06, .32);
+  cue(at(4, .25), [67, 74, 79, 86], .05, .34); cue(at(4, .75), [84, 88], .07, .28);
+  cue(at(5, .15), [76, 79], .1, .3); cue(at(5, .55), [84, 88, 91], .06, .36);
+  // bento tiles
+  cue(23.05, [60, 72], 0, .4, 'marimba');
+  [0, 1, 2, 3, 4, 5, 6, 7].forEach(i => cue(23.3 + i * .08, [72, 74, 76, 79, 81, 84, 86, 88][i], 0, .24));
+  // end card
+  cue(28, [48, 55, 60, 64], .04, .5, 'marimba'); cue(28, [72, 76, 79, 84, 88, 91, 96], .07, .36);
+  cue(29.0, [84, 88], .1, .32); cue(31.2, [79, 84], .09, .36); cue(31.6, [88, 91, 96], .08, .22);
 })();
 
 function makeGraph(ac) {
@@ -704,7 +681,7 @@ function schedule(ac, base) { const G = makeGraph(ac); for (const [t, m, v, k] o
 
 /* ================= boot ================= */
 const fontsReady = Promise.all(['600 100px Fredoka', '700 40px Nunito', '800 40px Nunito', '900 40px Nunito', '800 100px "Inter Tight"', '700 100px "Inter Tight"'].map(f => document.fonts.load(f)));
-window.__ready = fontsReady.then(() => { buildSprites(); frame(RENDER ? 0 : 29.5); return true; });
+window.__ready = fontsReady.then(() => { buildSprites(); frame(RENDER ? 0 : 30.5); return true; });
 window.__frame = t => frame(t);
 window.__dur = DUR;
 window.__audio = async () => {
